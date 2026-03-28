@@ -39,3 +39,6 @@ docs/archive/
 
 # CSV数据文件
 *.csv
+
+# 文档归档
+docs/
