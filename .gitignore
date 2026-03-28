@@ -30,3 +30,6 @@ dashboard/dashboard_data.json
 *.tmp
 *.swp
 *~
+
+# 备份文件
+backups/
