@@ -33,3 +33,9 @@ dashboard/dashboard_data.json
 
 # 备份文件
 backups/
+
+# 归档文档
+docs/archive/
+
+# CSV数据文件
+*.csv
