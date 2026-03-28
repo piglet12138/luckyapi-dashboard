@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sqlite3:*)",
+      "Bash(find:*)",
+      "Bash(python:*)",
+      "Bash(echo:*)",
+      "Bash(ls:*)",
+      "Bash(chmod:*)",
+      "Bash(./pre_pack_check.sh)"
+    ]
+  }
+}

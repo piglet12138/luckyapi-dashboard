@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NewAPI 数据看板</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- CryptoJS SHA256：HTTP 下 crypto.subtle 不可用时代替 -->
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
+
+    <style>
+        body {
+            background-color: #f5f3f0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            color: #2d2d2d;
+        }
+
+        .header {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e3df;
+            padding: 1.5rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: #2d2d2d;
+            margin: 0;
+        }
+
+        .header p {
+            font-size: 0.9rem;
+            color: #6b6b6b;
+            margin: 0.25rem 0 0 0;
+        }
+
+        .nav-tabs {
+            border-bottom: 2px solid #e5e3df;
+            margin-bottom: 2rem;
+        }
+
+        .nav-tabs .nav-link {
+            color: #6b6b6b;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+        }
+
+        .nav-tabs .nav-link:hover {
+            color: #2d2d2d;
+            border: none;
+        }
+
+        .nav-tabs .nav-link.active {
+            color: #8b7355;
+            background-color: transparent;
+            border: none;
+            border-bottom: 2px solid #8b7355;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid #e5e3df;
+            border-radius: 6px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            transition: box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 110px;
+        }
+
+        .metric-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .metric-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .metric-card-left {
+            flex: 1;
+        }
+
+        .metric-value {
+            font-size: 1.75rem;
+            font-weight: 500;
+            color: #2d2d2d;
+            margin: 0.35rem 0 0.1rem 0;
+            line-height: 1.2;
+        }
+
+        .metric-label {
+            color: #6b6b6b;
+            font-size: 0.85rem;
+            margin-bottom: 0;
+        }
+
+        .metric-sublabel {
+            color: #999;
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .metric-trend {
+            font-size: 0.78rem;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: flex-start;
+            padding-top: 0.1rem;
+            min-width: 70px;
+            text-align: right;
+            gap: 0.15rem;
+        }
+
+        .metric-trend .trend-arrow {
+            font-size: 1rem;
+            line-height: 1;
+        }
+
+        .metric-trend .trend-diff {
+            font-size: 0.72rem;
+            line-height: 1;
+        }
+
+        .metric-trend.up { color: #22a06b; }
+        .metric-trend.down { color: #e2483d; }
+        .metric-trend.flat { color: #999; }
+
+        .chart-card {
+            background: white;
+            border: 1px solid #e5e3df;
+            border-radius: 6px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-title {
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: #2d2d2d;
+        }
+
+        .chart-description {
+            font-size: 0.8rem;
+            color: #6b6b6b;
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 350px;
+        }
+
+        .update-time {
+            color: #6b6b6b;
+            font-size: 0.8rem;
+            text-align: right;
+            margin-top: 1rem;
+            padding: 1rem 0;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin: 2rem 0 1rem 0;
+            color: #2d2d2d;
+        }
+
+        .section-subtitle {
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin: 1.5rem 0 0.75rem 0;
+            color: #6b6b6b;
+        }
+
+        .badge-phase2 {
+            background-color: #6b9080;
+            color: white;
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+
+        /* Token 验证登录框 */
+        #authGate {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f5f3f0 0%, #e8e4df 100%);
+        }
+        #authGate .auth-card {
+            background: white;
+            border: 1px solid #e5e3df;
+            border-radius: 8px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 360px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        }
+        #authGate h2 {
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: #2d2d2d;
+            margin-bottom: 0.5rem;
+        }
+        #authGate .auth-hint {
+            font-size: 0.85rem;
+            color: #6b6b6b;
+            margin-bottom: 1.5rem;
+        }
+        #authGate input[type="password"] {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            border: 1px solid #e5e3df;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        #authGate input[type="password"]:focus {
+            border-color: #8b7355;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(139,115,85,0.2);
+        }
+        #authGate .btn-auth {
+            width: 100%;
+            margin-top: 1rem;
+            padding: 0.6rem;
+            background: #8b7355;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        #authGate .btn-auth:hover { background: #7a6349; }
+        #authGate .auth-error {
+            color: #c17767;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+        .logout-btn {
+            font-size: 0.8rem;
+            color: #6b6b6b;
+            text-decoration: none;
+            margin-left: 1rem;
+        }
+        .logout-btn:hover { color: #8b7355; }
+    </style>
+</head>
+<body>
+    <!-- Token 验证门禁（未通过时显示，默认显示登录框） -->
+    <div id="authGate" style="display: flex;">
+        <div class="auth-card">
+            <h2>NewAPI 数据看板</h2>
+            <p class="auth-hint">请输入访问 Token 以查看看板</p>
+            <form id="authForm" onsubmit="return handleAuthSubmit(event);">
+                <input type="password" id="authToken" placeholder="访问 Token" autocomplete="off" />
+                <p class="auth-error" id="authError">Token 错误，请重试</p>
+                <button type="submit" class="btn-auth">验证并进入</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 看板主体（通过验证后显示） -->
+    <div id="dashboardContent" style="display: none;">
+    <!-- 头部 -->
+    <div class="header">
+        <div class="container">
+            <h1>NewAPI 数据看板 <a href="#" class="logout-btn" id="logoutBtn" title="退出后需重新输入 Token">退出</a></h1>
+            <p>业务指标监控与分析 · Phase 2 新增核心指标</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Tab导航 -->
+        <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="daily-tab" data-bs-toggle="tab" data-bs-target="#daily" type="button" role="tab">
+                    📊 每日趋势
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="overall-tab" data-bs-toggle="tab" data-bs-target="#overall" type="button" role="tab">
+                    📈 整体概览
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab内容 -->
+        <div class="tab-content" id="dashboardTabsContent">
+            <!-- 每日趋势 Tab -->
+            <div class="tab-pane fade show active" id="daily" role="tabpanel">
+                <!-- 核心指标卡片 -->
+                <h2 class="section-title">核心指标</h2>
+                <div class="row" id="metricsCards">
+                    <!-- 动态生成 -->
+                </div>
+
+                <!-- 用户增长分析 -->
+                <h2 class="section-title">用户增长趋势</h2>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">用户增长趋势（最近30天）</div>
+                            <div class="chart-description">
+                                展示每日新增用户、活跃用户和付费用户的变化趋势。关注新增用户的稳定性和付费用户的增长速度。
+                            </div>
+                            <div id="userGrowthChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">DAU 趋势（最近30天）</div>
+                            <div class="chart-description">
+                                每日活跃用户数（DAU）反映产品的用户粘性。持续上升表示用户留存良好，波动较大需关注用户流失原因。
+                            </div>
+                            <div id="dauTrendChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 留存与转化 -->
+                <h2 class="section-title">留存与转化趋势</h2>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">留存率趋势（最近30天）</div>
+                            <div class="chart-description">
+                                7日留存率：7天前活跃的用户中今天仍活跃的比例。留存率高于40%表示产品粘性强，低于20%需优化用户体验。
+                            </div>
+                            <div id="retentionChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">收入趋势（最近30天）</div>
+                            <div class="chart-description">
+                                累计收入反映商业化效果。关注收入增长率和ARPU（人均收入）的变化，评估定价策略的有效性。
+                            </div>
+                            <div id="revenueTrendChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 2: 新用户转化率 -->
+                <h2 class="section-title">
+                    新用户转化率分析
+                    <span class="badge-phase2">Phase 2</span>
+                </h2>
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="chart-card">
+                            <div class="chart-title">新用户转化率趋势（最近30天）</div>
+                            <div class="chart-description">
+                                按首次使用日期分组，追踪新用户在不同时间窗口内的付费转化率。<strong>D3转化率</strong>是核心指标，反映新用户在3天内的付费意愿。D0转化率低但D3转化率高，说明用户需要时间了解产品价值，应优化前3天的引导流程。
+                            </div>
+                            <div id="newUserConversionChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 整体概览 Tab -->
+            <div class="tab-pane fade" id="overall" role="tabpanel">
+                <!-- Phase 2: 分层复购率 -->
+                <h2 class="section-title">
+                    复购率分析
+                    <span class="badge-phase2">Phase 2</span>
+                </h2>
+                <div class="row" id="repurchaseMetricsCards">
+                    <!-- 动态生成 -->
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">分层复购率分布（历史累计）</div>
+                            <div class="chart-description">
+                                根据充值次数将付费用户分为4个层级：<strong>单次充值</strong>（1次）、<strong>低频复购</strong>（2-5次）、<strong>中频复购</strong>（6-20次）、<strong>高频复购</strong>（>20次）。高频用户虽然占比小，但贡献大量收入，需要重点维护。单次充值用户占比高，说明有巨大的复购提升空间。
+                            </div>
+                            <div id="repurchaseSegmentChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">复购用户数量分布（历史累计）</div>
+                            <div class="chart-description">
+                                展示各复购层级的用户数量。用于识别不同价值层级的用户规模，制定差异化运营策略。
+                            </div>
+                            <div id="repurchaseCountChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 3: 注册激活分析 -->
+                <h2 class="section-title">
+                    注册激活分析
+                    <span class="badge-phase2" style="background-color: #8b7355;">Phase 3</span>
+                </h2>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">累计注册 vs 累计激活趋势</div>
+                            <div class="chart-description">
+                                展示累计注册用户和累计激活用户的增长趋势，两条线之间的差距即为未激活用户池，代表潜在的增长机会。
+                            </div>
+                            <div id="registrationActivationChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">整体激活率趋势</div>
+                            <div class="chart-description">
+                                整体激活率 = 累计激活用户 / 累计注册用户，反映产品对注册用户的吸引力。激活率下降说明新用户质量下降或产品体验问题。
+                            </div>
+                            <div id="overallActivationRateChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 用户分层 -->
+                <h2 class="section-title">用户价值分层</h2>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">用户分层分布（历史累计）</div>
+                            <div class="chart-description">
+                                根据调用量将用户分为未付费、轻度、中度、重度四类。重度用户（>100次调用）是核心价值用户，需重点维护。
+                            </div>
+                            <div id="userSegmentChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">激活点分析（历史累计）</div>
+                            <div class="chart-description">
+                                不同调用次数区间的付费转化率。15次调用是关键激活点，超过此阈值的用户付费意愿显著提升。
+                            </div>
+                            <div id="activationChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 渠道分析 -->
+                <h2 class="section-title">渠道分析</h2>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">渠道新增用户排行（历史累计）</div>
+                            <div class="chart-description">
+                                各渠道（首次使用模型）带来的新增用户数。识别高价值渠道，优化资源投放策略。
+                            </div>
+                            <div id="channelUsersChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-title">渠道转化率对比（历史累计）</div>
+                            <div class="chart-description">
+                                各渠道的付费转化率（总付费用户/总新增用户）。高转化率渠道说明用户质量好，应加大投入。仅显示新增用户≥10的渠道。
+                            </div>
+                            <div id="channelConversionChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 模型使用 -->
+                <h2 class="section-title">模型使用分析</h2>
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="chart-card">
+                            <div class="chart-title">模型调用排行 Top 10（历史累计）</div>
+                            <div class="chart-description">
+                                各模型的总调用次数。热门模型反映用户需求偏好，可作为产品优化和定价策略的参考。
+                            </div>
+                            <div id="modelUsageChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 更新时间 -->
+        <div class="update-time" id="updateTime">
+            数据更新时间: 加载中...
+        </div>
+    </div>
+    </div>
+    <!-- end #dashboardContent -->
+
+    <script>
+        // ========== 前端 Token 验证（仅防随意浏览，数据文件仍可被直接访问） ==========
+        // 访问 Token 的 SHA-256 哈希（Token 已保存于 .dashboard_token，请妥善保管。不含 + 避免粘贴被当空格）
+        const AUTH_TOKEN_HASH = '91f06ddf8dc64b45a750c975b1131e651957ad7c54af256c5d7d98a1c7613c15';
+
+        // 使用 CryptoJS.SHA256（HTTP 下与 crypto.subtle 结果一致，且不依赖安全上下文）
+        function getTokenHashSync(str) {
+            if (typeof CryptoJS !== 'undefined') {
+                return CryptoJS.SHA256(str).toString(CryptoJS.enc.Hex);
+            }
+            if (typeof crypto !== 'undefined' && crypto.subtle) {
+                return null;
+            }
+            return '';
+        }
+
+        async function getTokenHash(str) {
+            if (typeof crypto !== 'undefined' && crypto.subtle) {
+                try {
+                    var buf = new TextEncoder().encode(str);
+                    var hash = await crypto.subtle.digest('SHA-256', buf);
+                    return Array.from(new Uint8Array(hash)).map(function(b){ return ('0'+b.toString(16)).slice(-2); }).join('');
+                } catch (e) {}
+            }
+            return getTokenHashSync(str);
+        }
+
+        function isAuthenticated() {
+            return sessionStorage.getItem('dashboard_auth') === AUTH_TOKEN_HASH;
+        }
+
+        function showAuthGate() {
+            document.getElementById('authGate').style.display = 'flex';
+            document.getElementById('dashboardContent').style.display = 'none';
+        }
+
+        function showDashboard() {
+            document.getElementById('authGate').style.display = 'none';
+            document.getElementById('dashboardContent').style.display = 'block';
+        }
+
+        async function handleAuthSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('authToken');
+            const errEl = document.getElementById('authError');
+            errEl.style.display = 'none';
+            const token = (input.value || '').trim();
+            if (!token) {
+                errEl.style.display = 'block';
+                errEl.textContent = '请输入 Token';
+                return false;
+            }
+            try {
+                var hash = await getTokenHash(token);
+                // 粘贴时 + 可能被当成空格，再试一次把空格改回 +
+                if (hash !== AUTH_TOKEN_HASH && token.indexOf(' ') !== -1) {
+                    hash = await getTokenHash(token.replace(/ /g, '+'));
+                }
+                if (hash !== AUTH_TOKEN_HASH) {
+                    errEl.style.display = 'block';
+                    errEl.textContent = 'Token 错误，请重试';
+                    return false;
+                }
+                sessionStorage.setItem('dashboard_auth', hash);
+                showDashboard();
+                loadData();
+            } catch (err) {
+                errEl.style.display = 'block';
+                errEl.textContent = '验证失败: ' + (err.message || '请重试');
+                console.error(err);
+            }
+            return false;
+        }
+
+        function handleLogout() {
+            sessionStorage.removeItem('dashboard_auth');
+            showAuthGate();
+            document.getElementById('authToken').value = '';
+        }
+
+        // 全局数据
+        let dashboardData = null;
+        // 存储所有图表实例
+        const chartInstances = [];
+
+        // Claude风格配色
+        const colors = {
+            primary: '#8b7355',
+            secondary: '#a68a6d',
+            success: '#6b9080',
+            warning: '#d4a574',
+            danger: '#c17767',
+            info: '#7a9eb8',
+            light: '#e5e3df',
+            dark: '#2d2d2d',
+            // Phase 2 新增颜色
+            phase2Primary: '#6b9080',
+            phase2Secondary: '#7a9eb8'
+        };
+
+        // 加载数据
+        async function loadData() {
+            try {
+                const response = await fetch('dashboard_data.json');
+                dashboardData = await response.json();
+                // 过滤掉今天的数据，避免当天数据不完整影响观感
+                const today = new Date().toISOString().slice(0, 10);
+                if (dashboardData.daily_trends) {
+                    dashboardData.daily_trends = dashboardData.daily_trends.filter(d => d.stat_date < today);
+                }
+                if (dashboardData.user_growth) {
+                    dashboardData.user_growth = dashboardData.user_growth.filter(d => d.stat_date < today);
+                }
+                if (dashboardData.retention_trends) {
+                    dashboardData.retention_trends = dashboardData.retention_trends.filter(d => d.stat_date < today);
+                }
+                if (dashboardData.new_user_conversion) {
+                    dashboardData.new_user_conversion = dashboardData.new_user_conversion.filter(d => d.cohort_date < today);
+                }
+                renderDashboard();
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                alert('加载数据失败，请确保 dashboard_data.json 文件存在');
+            }
+        }
+
+        // 渲染看板
+        function renderDashboard() {
+            // 每日趋势 Tab
+            renderMetricCards();
+            renderUserGrowth();
+            renderDAUTrend();
+            renderRetention();
+            renderRevenueTrend();
+            renderNewUserConversion();  // Phase 2
+
+            // 整体概览 Tab
+            renderRepurchaseMetrics();  // Phase 2
+            renderRepurchaseSegment();  // Phase 2
+            renderRepurchaseCount();    // Phase 2
+            renderRegistrationActivation();  // Phase 3
+            renderOverallActivationRate();   // Phase 3
+            renderUserSegment();
+            renderActivation();
+            renderChannelUsers();
+            renderChannelConversion();
+            renderModelUsage();
+
+            updateTime();
+        }
+
+        // 生成趋势 HTML
+        function trendHtml(current, previous, format) {
+            if (previous == null) return '';
+            const diff = current - previous;
+            if (diff === 0) return '<div class="metric-trend flat"><span class="trend-arrow">—</span><span class="trend-diff">与前日持平</span></div>';
+            const isUp = diff > 0;
+            const arrow = isUp ? '▲' : '▼';
+            const cls = isUp ? 'up' : 'down';
+            const diffStr = format === 'percent'
+                ? (isUp ? '+' : '') + diff.toFixed(2) + '%'
+                : (isUp ? '+' : '') + Math.round(diff).toLocaleString();
+            return `<div class="metric-trend ${cls}"><span class="trend-arrow">${arrow}</span><span class="trend-diff">${diffStr} 较前日</span></div>`;
+        }
+
+        // 渲染核心指标卡片
+        function renderMetricCards() {
+            const health = dashboardData.core_metrics.health;
+            const growth = dashboardData.core_metrics.growth;
+
+            const today = health.today;
+            const yesterday = health.yesterday;
+            const todayGrowth = growth.today;
+            const yesterdayGrowth = growth.yesterday;
+
+            const dateLabel = today.stat_date;
+
+            // 健康度指标
+            const healthCards = [
+                { label: 'DAU', value: today.dau, prev: yesterday.dau, format: 'number' },
+                { label: '付费用户', value: today.paying_users, prev: yesterday.paying_users, format: 'number' },
+                { label: '当日收入', value: today.daily_revenue, prev: yesterday.daily_revenue, format: 'currency' },
+                { label: '复购用户', value: today.repurchase_users, prev: yesterday.repurchase_users, format: 'number' },
+                { label: '未激活用户池', value: today.inactive_pool, prev: yesterday.inactive_pool, format: 'number' }
+            ];
+
+            // 增长质量指标
+            const growthCards = [
+                { label: '新注册', value: todayGrowth.new_users, prev: yesterdayGrowth.new_users, format: 'number' },
+                { label: '激活', value: todayGrowth.activated_new_users, prev: yesterdayGrowth.activated_new_users, format: 'number' },
+                { label: 'D0付费', value: todayGrowth.d0_paying_users, prev: yesterdayGrowth.d0_paying_users, format: 'number' },
+                { label: 'D3留存率', value: todayGrowth.d3_retention_rate, prev: yesterdayGrowth.d3_retention_rate, format: 'percent' }
+            ];
+
+            const renderCards = (cards, title) => `
+                <h3 class="section-subtitle">${title} - ${dateLabel}</h3>
+                <div class="row">
+                    ${cards.map(card => `
+                        <div class="col-md col-sm-6">
+                            <div class="metric-card">
+                                <div class="metric-card-top">
+                                    <div class="metric-card-left">
+                                        <div class="metric-label">${card.label}</div>
+                                        <div class="metric-value">${formatValue(card.value, card.format)}</div>
+                                    </div>
+                                    ${trendHtml(card.value, card.prev, card.format)}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            document.getElementById('metricsCards').innerHTML =
+                renderCards(healthCards, '产品健康度') + renderCards(growthCards, '新用户增长');
+        }
+
+        // 渲染分层复购率指标卡片（Phase 2）
+        function renderRepurchaseMetrics() {
+            const data = dashboardData.repurchase_analysis;
+            if (!data) return;
+
+            const cards = [
+                {
+                    label: '整体复购率',
+                    value: data.overall_repurchase_rate,
+                    format: 'percent',
+                    sublabel: '充值≥2次用户占比'
+                },
+                {
+                    label: '总付费用户',
+                    value: data.total_paying_users,
+                    format: 'number',
+                    sublabel: '历史累计'
+                },
+                {
+                    label: '高频用户',
+                    value: data.high_frequency_users,
+                    format: 'number',
+                    sublabel: '充值>20次'
+                },
+                {
+                    label: '单次充值率',
+                    value: data.single_purchase_rate,
+                    format: 'percent',
+                    sublabel: '复购提升空间'
+                }
+            ];
+
+            const html = cards.map(card => `
+                <div class="col-md-3 col-sm-6">
+                    <div class="metric-card">
+                        <div class="metric-label">${card.label}</div>
+                        <div class="metric-value">${formatValue(card.value, card.format)}</div>
+                        <div class="metric-sublabel">${card.sublabel}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('repurchaseMetricsCards').innerHTML = html;
+        }
+
+        // 格式化数值
+        function formatValue(value, format) {
+            if (value === null || value === undefined) return '-';
+
+            switch(format) {
+                case 'number':
+                    return value.toLocaleString();
+                case 'currency':
+                    return '¥' + value.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                case 'percent':
+                    return value.toFixed(2) + '%';
+                default:
+                    return value;
+            }
+        }
+
+        // 渲染用户增长趋势
+        function renderUserGrowth() {
+            const chart = echarts.init(document.getElementById('userGrowthChart'));
+            const data = dashboardData.user_growth;
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis'
+                },
+                legend: {
+                    data: ['新增用户', '活跃用户', '付费用户']
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(d => d.stat_date),
+                    axisLabel: {
+                        rotate: 45
+                    }
+                },
+                yAxis: {
+                    type: 'value'
+                },
+                series: [
+                    {
+                        name: '新增用户',
+                        type: 'line',
+                        data: data.map(d => d.new_users),
+                        itemStyle: { color: colors.primary }
+                    },
+                    {
+                        name: '活跃用户',
+                        type: 'line',
+                        data: data.map(d => d.active_users),
+                        itemStyle: { color: colors.info }
+                    },
+                    {
+                        name: '付费用户',
+                        type: 'line',
+                        data: data.map(d => d.paying_users),
+                        itemStyle: { color: colors.success }
+                    }
+                ]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // 渲染DAU趋势图
+        function renderDAUTrend() {
+            const chart = echarts.init(document.getElementById('dauTrendChart'));
+            const data = dashboardData.daily_trends;
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(d => d.stat_date),
+                    axisLabel: {
+                        rotate: 45
+                    }
+                },
+                yAxis: {
+                    type: 'value'
+                },
+                series: [{
+                    name: 'DAU',
+                    type: 'line',
+                    smooth: true,
+                    data: data.map(d => d.dau),
+                    itemStyle: {
+                        color: colors.primary
+                    },
+                    areaStyle: {
+                        color: {
+                            type: 'linear',
+                            x: 0, y: 0, x2: 0, y2: 1,
+                            colorStops: [
+                                { offset: 0, color: 'rgba(139, 115, 85, 0.3)' },
+                                { offset: 1, color: 'rgba(139, 115, 85, 0.05)' }
+                            ]
+                        }
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // 渲染留存率趋势
+        function renderRetention() {
+            const chart = echarts.init(document.getElementById('retentionChart'));
+            const data = dashboardData.retention_trends;
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        let result = params[0].name + '<br/>';
+                        params.forEach(p => {
+                            result += p.marker + ' ' + p.seriesName + ': ' + (p.value || 0).toFixed(2) + '%<br/>';
+                        });
+                        return result;
+                    }
+                },
+                legend: {
+                    data: ['7日留存率', '付费转化率', '复购率']
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(d => d.stat_date),
+                    axisLabel: {
+                        rotate: 45
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        formatter: '{value}%'
+                    }
+                },
+                series: [
+                    {
+                        name: '7日留存率',
+                        type: 'line',
+                        data: data.map(d => d.retention_rate),
+                        itemStyle: { color: colors.primary }
+                    },
+                    {
+                        name: '付费转化率',
+                        type: 'line',
+                        data: data.map(d => d.conversion_rate),
+                        itemStyle: { color: colors.success }
+                    },
+                    {
+                        name: '复购率',
+                        type: 'line',
+                        data: data.map(d => d.repurchase_rate),
+                        itemStyle: { color: colors.warning }
+                    }
+                ]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // 渲染收入趋势图
+        function renderRevenueTrend() {
+            const chart = echarts.init(document.getElementById('revenueTrendChart'));
+            const data = dashboardData.daily_trends;
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        return params[0].name + '<br/>' +
+                               params[0].marker + ' 累计收入: $' +
+                               params[0].value.toLocaleString('en-US', {minimumFractionDigits: 2});
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(d => d.stat_date),
+                    axisLabel: {
+                        rotate: 45
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        formatter: '${value}'
+                    }
+                },
+                series: [{
+                    name: '累计收入',
+                    type: 'line',
+                    smooth: true,
+                    data: data.map(d => d.total_revenue),
+                    itemStyle: {
+                        color: colors.success
+                    },
+                    areaStyle: {
+                        color: {
+                            type: 'linear',
+                            x: 0, y: 0, x2: 0, y2: 1,
+                            colorStops: [
+                                { offset: 0, color: 'rgba(107, 144, 128, 0.3)' },
+                                { offset: 1, color: 'rgba(107, 144, 128, 0.05)' }
+                            ]
+                        }
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // Phase 2: 渲染新用户转化率趋势
+        function renderNewUserConversion() {
+            const chart = echarts.init(document.getElementById('newUserConversionChart'));
+            const data = dashboardData.new_user_conversion || [];
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        let result = params[0].name + '<br/>';
+                        result += '新增用户: ' + (data.find(d => d.cohort_date === params[0].name)?.new_users || 0) + '<br/>';
+                        params.forEach(p => {
+                            result += p.marker + ' ' + p.seriesName + ': ' + (p.value || 0).toFixed(2) + '%<br/>';
+                        });
+                        return result;
+                    }
+                },
+                legend: {
+                    data: ['D0转化率', 'D3转化率', 'D7转化率', 'D30转化率']
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(d => d.cohort_date),
+                    axisLabel: {
+                        rotate: 45
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        formatter: '{value}%'
+                    }
+                },
+                series: [
+                    {
+                        name: 'D0转化率',
+                        type: 'line',
+                        data: data.map(d => d.d0_conversion_rate),
+                        itemStyle: { color: colors.info },
+                        lineStyle: { type: 'dashed' }
+                    },
+                    {
+                        name: 'D3转化率',
+                        type: 'line',
+                        data: data.map(d => d.d3_conversion_rate),
+                        itemStyle: { color: colors.phase2Primary },
+                        lineStyle: { width: 3 },
+                        emphasis: { focus: 'series' }
+                    },
+                    {
+                        name: 'D7转化率',
+                        type: 'line',
+                        data: data.map(d => d.d7_conversion_rate),
+                        itemStyle: { color: colors.warning },
+                        lineStyle: { type: 'dashed' }
+                    },
+                    {
+                        name: 'D30转化率',
+                        type: 'line',
+                        data: data.map(d => d.d30_conversion_rate),
+                        itemStyle: { color: colors.danger },
+                        lineStyle: { type: 'dashed' }
+                    }
+                ]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // Phase 2: 渲染分层复购率饼图
+        function renderRepurchaseSegment() {
+            const chart = echarts.init(document.getElementById('repurchaseSegmentChart'));
+            const data = dashboardData.repurchase_analysis;
+            if (!data) return;
+
+            const chartData = [
+                { name: '单次充值(1次)', value: data.single_purchase_rate, color: '#d4d4d4' },
+                { name: '低频复购(2-5次)', value: data.low_frequency_rate, color: colors.info },
+                { name: '中频复购(6-20次)', value: data.mid_frequency_rate, color: colors.phase2Primary },
+                { name: '高频复购(>20次)', value: data.high_frequency_rate, color: '#d4a574' }
+            ];
+
+            const option = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c}% ({d}%占比)'
+                },
+                legend: {
+                    orient: 'vertical',
+                    right: 10,
+                    top: 'center'
+                },
+                series: [{
+                    name: '复购率',
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                        borderRadius: 10,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    },
+                    label: {
+                        show: true,
+                        formatter: '{b}\n{c}%'
+                    },
+                    data: chartData.map(d => ({
+                        name: d.name,
+                        value: d.value,
+                        itemStyle: { color: d.color }
+                    }))
+                }]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // Phase 2: 渲染复购用户数量柱状图
+        function renderRepurchaseCount() {
+            const chart = echarts.init(document.getElementById('repurchaseCountChart'));
+            const data = dashboardData.repurchase_analysis;
+            if (!data) return;
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    },
+                    formatter: function(params) {
+                        return params[0].name + '<br/>' +
+                               params[0].marker + ' 用户数: ' + params[0].value + ' 人';
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['单次充值', '低频复购', '中频复购', '高频复购']
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '用户数 (人)'
+                },
+                series: [{
+                    name: '用户数',
+                    type: 'bar',
+                    data: [
+                        {value: data.single_purchase_users, itemStyle: {color: '#d4d4d4'}},
+                        {value: data.low_frequency_users, itemStyle: {color: colors.info}},
+                        {value: data.mid_frequency_users, itemStyle: {color: colors.phase2Primary}},
+                        {value: data.high_frequency_users, itemStyle: {color: '#d4a574'}}
+                    ],
+                    label: {
+                        show: true,
+                        position: 'top',
+                        formatter: '{c} 人'
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // Phase 3: 渲染注册激活趋势
+        function renderRegistrationActivation() {
+            const chart = echarts.init(document.getElementById('registrationActivationChart'));
+            const data = dashboardData.registration_activation_analysis.slice(0, -1); // 排除今天
+
+            const option = {
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['累计注册', '累计激活', '未激活用户池'] },
+                xAxis: { type: 'category', data: data.map(d => d.stat_date) },
+                yAxis: { type: 'value' },
+                series: [
+                    { name: '累计注册', type: 'line', data: data.map(d => d.total_registered), smooth: true },
+                    { name: '累计激活', type: 'line', data: data.map(d => d.total_activated), smooth: true },
+                    { name: '未激活用户池', type: 'line', data: data.map(d => d.inactive_pool), smooth: true, lineStyle: { type: 'dashed' } }
+                ]
+            };
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // Phase 3: 渲染整体激活率趋势
+        function renderOverallActivationRate() {
+            const chart = echarts.init(document.getElementById('overallActivationRateChart'));
+            const data = dashboardData.registration_activation_analysis.slice(0, -1); // 排除今天
+
+            const option = {
+                tooltip: { trigger: 'axis', formatter: '{b}<br/>{a}: {c}%' },
+                xAxis: { type: 'category', data: data.map(d => d.stat_date) },
+                yAxis: { type: 'value', axisLabel: { formatter: '{value}%' } },
+                series: [{ name: '整体激活率', type: 'line', data: data.map(d => d.overall_activation_rate), smooth: true }]
+            };
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // 渲染用户分层饼图
+        function renderUserSegment() {
+            const chart = echarts.init(document.getElementById('userSegmentChart'));
+            const data = dashboardData.user_segments;
+
+            const segmentColors = {
+                '0_未付费': '#d4d4d4',
+                '1_轻度': colors.info,
+                '2_中度': colors.secondary,
+                '3_重度': colors.primary
+            };
+
+            const option = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} 人 ({d}%)'
+                },
+                legend: {
+                    orient: 'vertical',
+                    right: 10,
+                    top: 'center'
+                },
+                series: [{
+                    name: '用户分层',
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                        borderRadius: 10,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    },
+                    label: {
+                        show: true,
+                        formatter: '{b}\n{d}%'
+                    },
+                    data: data.map(d => ({
+                        name: d.user_segment,
+                        value: d.user_count,
+                        itemStyle: { color: segmentColors[d.user_segment] }
+                    }))
+                }]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // 渲染激活点分析
+        function renderActivation() {
+            const chart = echarts.init(document.getElementById('activationChart'));
+            const data = dashboardData.activation_analysis;
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(d => d.call_range)
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '转化率 (%)',
+                    axisLabel: {
+                        formatter: '{value}%'
+                    }
+                },
+                series: [{
+                    name: '转化率',
+                    type: 'bar',
+                    data: data.map(d => d.conversion_rate),
+                    itemStyle: {
+                        color: colors.primary
+                    },
+                    label: {
+                        show: true,
+                        position: 'top',
+                        formatter: '{c}%'
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // 渲染渠道新增用户
+        function renderChannelUsers() {
+            const chart = echarts.init(document.getElementById('channelUsersChart'));
+            const data = dashboardData.channel_details.slice(0, 10);
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value'
+                },
+                yAxis: {
+                    type: 'category',
+                    data: data.map(d => d.channel).reverse(),
+                    axisLabel: {
+                        interval: 0,
+                        formatter: function(value) {
+                            return value.length > 20 ? value.substring(0, 20) + '...' : value;
+                        }
+                    }
+                },
+                series: [{
+                    name: '新增用户',
+                    type: 'bar',
+                    data: data.map(d => d.new_users).reverse(),
+                    itemStyle: {
+                        color: colors.primary
+                    },
+                    label: {
+                        show: true,
+                        position: 'right'
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // 渲染渠道转化率
+        function renderChannelConversion() {
+            const chart = echarts.init(document.getElementById('channelConversionChart'));
+            const data = dashboardData.channel_details
+                .filter(d => d.new_users >= 10)
+                .sort((a, b) => b.conversion_rate - a.conversion_rate)
+                .slice(0, 10);
+
+            const reversedData = [...data].reverse();
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    },
+                    formatter: function(params) {
+                        const item = reversedData[params[0].dataIndex];
+                        return params[0].name + '<br/>' +
+                               '新增用户: ' + item.new_users + '<br/>' +
+                               '付费用户: ' + item.paying_users + '<br/>' +
+                               '转化率: ' + item.conversion_rate + '%';
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        formatter: '{value}%'
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: reversedData.map(d => d.channel),
+                    axisLabel: {
+                        interval: 0,
+                        formatter: function(value) {
+                            return value.length > 20 ? value.substring(0, 20) + '...' : value;
+                        }
+                    }
+                },
+                series: [{
+                    name: '转化率',
+                    type: 'bar',
+                    data: reversedData.map(d => d.conversion_rate),
+                    itemStyle: {
+                        color: colors.success
+                    },
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: '{c}%'
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // 渲染模型使用
+        function renderModelUsage() {
+            const chart = echarts.init(document.getElementById('modelUsageChart'));
+            const data = dashboardData.model_usage;
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value'
+                },
+                yAxis: {
+                    type: 'category',
+                    data: data.map(d => d.model_name).reverse(),
+                    axisLabel: {
+                        interval: 0,
+                        formatter: function(value) {
+                            return value.length > 25 ? value.substring(0, 25) + '...' : value;
+                        }
+                    }
+                },
+                series: [{
+                    name: '调用次数',
+                    type: 'bar',
+                    data: data.map(d => d.total_calls).reverse(),
+                    itemStyle: {
+                        color: colors.secondary
+                    },
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: '{c}'
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        // 更新时间
+        function updateTime() {
+            const time = new Date(dashboardData.update_time).toLocaleString('zh-CN');
+            document.getElementById('updateTime').textContent = '数据更新时间: ' + time;
+        }
+
+        // 全局存储所有图表实例
+        window.allCharts = [];
+
+        // 包装echarts.init，自动记录实例
+        const originalEchartsInit = echarts.init;
+        echarts.init = function(dom, theme, opts) {
+            let chart = echarts.getInstanceByDom(dom);
+            if (!chart) {
+                chart = originalEchartsInit.call(echarts, dom, theme, opts);
+                window.allCharts.push(chart);
+            }
+            return chart;
+        };
+
+        // Tab切换时重新调整所有图表尺寸
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabButtons = document.querySelectorAll('[data-bs-toggle="tab"]');
+
+            tabButtons.forEach(button => {
+                button.addEventListener('shown.bs.tab', function(event) {
+                    setTimeout(() => {
+                        window.allCharts.forEach(chart => {
+                            if (chart && !chart.isDisposed()) {
+                                chart.resize();
+                            }
+                        });
+                    }, 150);
+                });
+            });
+        });
+
+        // 页面加载时执行：先校验 Token，再决定显示登录框或看板
+        window.onload = function() {
+            document.getElementById('logoutBtn').addEventListener('click', function(e) { e.preventDefault(); handleLogout(); });
+            if (isAuthenticated()) {
+                showDashboard();
+                loadData();
+            } else {
+                showAuthGate();
+            }
+        };
+
+        // 窗口调整时resize所有图表
+        window.addEventListener('resize', function() {
+            window.allCharts.forEach(chart => {
+                if (chart && !chart.isDisposed()) {
+                    chart.resize();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

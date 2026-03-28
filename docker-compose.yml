@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: newapi-nginx
+    ports:
+      - "${SERVER_PORT:-80}:80"
+      - "${SERVER_PORT_SSL:-443}:443"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./logs/nginx:/var/log/nginx
+    restart: unless-stopped
+    networks:
+      - newapi-network
+    depends_on:
+      - app
+
+  app:
+    build: .
+    container_name: newapi-app
+    environment:
+      - DB_PATH=${DB_PATH:-/app/newapi_warehouse.db}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./newapi_warehouse.db:/app/newapi_warehouse.db
+      - ./dashboard:/app/dashboard
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+    restart: unless-stopped
+    networks:
+      - newapi-network
+    command: tail -f /dev/null  # 保持容器运行
+
+networks:
+  newapi-network:
+    driver: bridge
+
+volumes:
+  db-data:
+  logs-data:
+  backups-data:
